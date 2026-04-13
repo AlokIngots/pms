@@ -23,9 +23,10 @@ def create_batch_cards(cur, so_id, so_number, customer, line_items):
     batch_nos = []
     for item in line_items:
         line_no = item.get('sr_no') or item.get('line_no') or 1
-        so_parts = so_number.split('/')
-        serial = so_parts[3] if len(so_parts) > 3 else so_number[-3:]
-        batch_card_no = f"BC-{serial}-L{line_no}"
+        # Get next batch number from existing batches
+        cur.execute("SELECT MAX(CAST(batch_card_no AS UNSIGNED)) FROM batches WHERE batch_card_no REGEXP '^[0-9]+$'")
+        last = cur.fetchone()[0] or 1072
+        batch_card_no = str(last + 1)
         grade     = item.get('grade', '')
         size_mm   = item.get('size_mm', 0)
         qty_tons  = item.get('qty_tons', 0)

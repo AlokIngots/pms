@@ -144,12 +144,12 @@ function StageUpdateModal({ batch, onClose, onDone }) {
         <div style={{ padding:20 }}>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:12 }}>
             <div>
-              <label style={lbl}>Operator Name</label>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:"#555",marginBottom:4}}>Operator Name</label>
               <input value={form.operator} onChange={e => set('operator', e.target.value)}
                 placeholder="Operator name" style={inp()} />
             </div>
             <div>
-              <label style={lbl}>Machine</label>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:"#555",marginBottom:4}}>Machine</label>
               {machines.length > 0 ? (
                 <select value={form.machine_code} onChange={e => set('machine_code', e.target.value)} style={inp()}>
                   <option value="">Select machine</option>
@@ -161,7 +161,7 @@ function StageUpdateModal({ batch, onClose, onDone }) {
               )}
             </div>
             <div>
-              <label style={lbl}>Shift</label>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:"#555",marginBottom:4}}>Shift</label>
               <select value={form.shift} onChange={e => set('shift', e.target.value)} style={inp()}>
                 <option>A</option><option>B</option><option>C</option>
               </select>
@@ -170,15 +170,15 @@ function StageUpdateModal({ batch, onClose, onDone }) {
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:12 }}>
             <div>
-              <label style={lbl}>Pcs In</label>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:"#555",marginBottom:4}}>Pcs In</label>
               <input type="number" value={form.qty_pcs_in} onChange={e => set('qty_pcs_in', e.target.value)} style={inp()} />
             </div>
             <div>
-              <label style={lbl}>Pcs Out</label>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:"#555",marginBottom:4}}>Pcs Out</label>
               <input type="number" value={form.qty_pcs_out} onChange={e => set('qty_pcs_out', e.target.value)} style={inp()} />
             </div>
             <div>
-              <label style={lbl}>Rejected Pcs</label>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:"#555",marginBottom:4}}>Rejected Pcs</label>
               <input type="number" value={form.qty_rejected} onChange={e => set('qty_rejected', e.target.value)}
                 style={{ ...inp(), borderColor: Number(form.qty_rejected) > 0 ? '#E53935' : '#E0E0E0', color: Number(form.qty_rejected) > 0 ? '#E53935' : '#111' }} />
             </div>
@@ -186,17 +186,17 @@ function StageUpdateModal({ batch, onClose, onDone }) {
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
             <div>
-              <label style={lbl}>Weight In (kg)</label>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:"#555",marginBottom:4}}>Weight In (kg)</label>
               <input type="number" value={form.weight_kg_in} onChange={e => set('weight_kg_in', e.target.value)} style={inp()} />
             </div>
             <div>
-              <label style={lbl}>Weight Out (kg)</label>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:"#555",marginBottom:4}}>Weight Out (kg)</label>
               <input type="number" value={form.weight_kg_out} onChange={e => set('weight_kg_out', e.target.value)} style={inp()} />
             </div>
           </div>
 
           <div>
-            <label style={lbl}>Remarks</label>
+            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#555",marginBottom:4}}>Remarks</label>
             <input value={form.remarks} onChange={e => set('remarks', e.target.value)} placeholder="Optional remarks" style={inp()} />
           </div>
         </div>

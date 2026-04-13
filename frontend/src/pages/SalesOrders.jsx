@@ -498,7 +498,11 @@ export default function SalesOrders() {
                           {/* ── ACTION BUTTONS ── */}
                           <div style={{ marginTop:16, display:'flex', gap:8, flexWrap:'wrap' }}>
                             <button
-                              onClick={() => window.open(`${API}/api/pdf/so/${order.so_number}`, '_blank')}
+                              onClick={() => 
+                                window.open(
+                                  `${API}/api/pdf/so/${encodeURIComponent(order.so_number)}`, 
+                                  '_blank')
+                                }
                               style={{ background:'#185FA5', color:'#fff', border:'none', borderRadius:6, padding:'7px 16px', fontSize:12, fontWeight:600, cursor:'pointer' }}
                             >
                               📄 Print Sales Contract

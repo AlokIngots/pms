@@ -26,7 +26,10 @@ from routes.operator_logs import operator_logs_bp
 # ── New routes ───────────────────────────────────
 from routes.so_creation   import so_creation_bp
 from routes.crm_sync      import crm_sync_bp, start_crm_polling
-
+from routes.so_pdf        import so_pdf_bp
+from routes.master_data   import master_bp
+from routes.batch_card_pdf import batch_card_bp
+from routes.commercial_invoice import ci_pdf_bp
 # ── Register all blueprints ──────────────────────
 app.register_blueprint(operator_logs_bp)
 app.register_blueprint(batches_bp)
@@ -40,6 +43,10 @@ app.register_blueprint(reports_bp)
 app.register_blueprint(batch_cards_bp)
 app.register_blueprint(so_creation_bp)
 app.register_blueprint(crm_sync_bp)
+app.register_blueprint(so_pdf_bp)
+app.register_blueprint(master_bp)
+app.register_blueprint(batch_card_bp)
+app.register_blueprint(ci_pdf_bp)
 
 # ── Health check ─────────────────────────────────
 @app.route('/api/health')
@@ -152,3 +159,4 @@ if __name__ == '__main__':
     # Start CRM polling in background thread
     start_crm_polling()
     app.run(debug=True, port=5000)
+
