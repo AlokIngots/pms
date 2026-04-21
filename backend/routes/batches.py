@@ -62,7 +62,7 @@ def create_batch():
         db.close()
 
 @batches_bp.route('/api/batches/<int:bid>', methods=['GET'])
-def get_batch(bid):
+def get_batch_old(bid):
     db = get_db()
     cur = db.cursor()
     cur.execute("SELECT * FROM batches WHERE id=%s", (bid,))
@@ -149,3 +149,59 @@ def get_machine_log(bid):
         return jsonify(logs)
     finally:
         db.close()
+
+@batches_bp.route('/api/batches/no/<batch_no>', methods=['GET'])
+def get_batch(batch_no):
+    db = get_db()
+    cur = db.cursor()
+    cur.execute('SELECT * FROM batches WHERE batch_card_no = %s', (batch_no,))
+    rows = rows_to_list(cur)
+    if not rows:
+        db.close()
+        return jsonify({'error': 'Batch not found'}), 404
+    batch = rows[0]
+    if isinstance(batch.get('created_at'), datetime):
+        batch['created_at'] = batch['created_at'].isoformat()
+    if isinstance(batch.get('updated_at'), datetime):
+        batch['updated_at'] = batch['updated_at'].isoformat()
+    if batch.get('weight_kg'): batch['weight_kg'] = float(batch['weight_kg'])
+    if batch.get('size_mm'):   batch['size_mm']   = float(batch['size_mm'])
+    cur.execute('SELECT * FROM batch_stage_history WHERE batch_card_no = %s ORDER BY moved_at ASC', (batch_no,))
+    history = rows_to_list(cur)
+    for h in history:
+        if isinstance(h.get('moved_at'), datetime):
+            h['moved_at'] = h['moved_at'].isoformat()
+    batch['history'] = history
+    db.close()
+    return jsonify(batch)
+
+
+@batches_bp.route('/api/batches/no/<batch_no>/move', methods=['POST'])
+def move_batch_stage(batch_no):
+    data = request.get_json()
+    to_stage = data.get('to_stage')
+    moved_by = data.get('moved_by', 'Operator')
+    notes    = data.get('notes', '')
+    STAGES = ['RM Receive','UT Inspection','HT Process','Black Bar Str.','Peeling','Bright Bar Str.','Grinding','Cutting','Chamfering','Polishing','MPI Final','Packing','Dispatch']
+    if not to_stage or to_stage not in STAGES:
+        return jsonify({'error': 'Invalid stage'}), 400
+    db = get_db()
+    cur = db.cursor()
+    try:
+        cur.execute('SELECT current_stage FROM batches WHERE batch_card_no = %s', (batch_no,))
+        row = cur.fetchone()
+        if not row: return jsonify({'error': 'Not found'}), 404
+        from_stage = row[0]
+        stage_idx  = STAGES.index(to_stage)
+        cur.execute('UPDATE batches SET current_stage=%s, current_stage_index=%s, updated_at=NOW() WHERE batch_card_no=%s', (to_stage, stage_idx, batch_no))
+        cur.execute('INSERT INTO batch_stage_history (batch_card_no, from_stage, to_stage, moved_by, notes, moved_at) VALUES (%s,%s,%s,%s,%s,NOW())', (batch_no, from_stage, to_stage, moved_by, notes))
+        db.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+

@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+﻿import { Routes, Route } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import BatchCardCreator from './pages/BatchCardCreator'
 import Batches from './pages/Batches'
@@ -8,12 +8,13 @@ import AlertCentre from './pages/AlertCentre'
 import QualityChecks from './pages/QualityChecks'
 import Dispatch from './pages/Dispatch'
 import Documents from './pages/Documents'
+import SalesOrderDetail from './pages/SalesOrderDetail'
 import Reports from './pages/Reports'
 import ProductionLog from './pages/ProductionLog'
 import MaterialLog from './pages/MaterialLog'
 import AdminPanel from './pages/AdminPanel'
 import OperatorLog from './pages/OperatorLog'
-
+import BatchCardDetail from './pages/BatchCardDetail'
 
 function PlaceholderPage({ title }) {
   return (
@@ -71,12 +72,17 @@ export default function App() {
           <Route path="/dispatch" element={<Dispatch />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/orders/:soNumber" element={<SalesOrderDetail />} />
           <Route path="/production-log" element={<ProductionLog />} />
           <Route path="/operator-log" element={<OperatorLog />} />          
           <Route path="/material-log" element={<MaterialLog />} />          
           <Route path="/admin" element={<AdminPanel />} />        
+          <Route path="/scan/:batchNo" element={<BatchCardDetail />} />
           </Routes>
       </div>
     </div>
   )
 }
+
+
+

@@ -1,18 +1,32 @@
-from flask import Blueprint, request, jsonify
+﻿from flask import Blueprint, request, jsonify
 from db import get_db, rows_to_list, row_to_dict
 from datetime import datetime
 
 so_creation_bp = Blueprint('so_creation', __name__)
 
 def nd(v):
-    if v == '' or v is None:
+    if v is None:
+        return None
+    if isinstance(v, str) and v.strip() == '':
         return None
     return v
 
-def generate_so_number(cur):
-    cur.execute("SELECT * FROM so_number_sequence ORDER BY id DESC LIMIT 1")
+def nd_date(v):
+    if v is None:
+        return None
+    if isinstance(v, str) and v.strip() == '':
+        return None
+    return v
+
+def generate_so_number(cur, order_type='Export'):
+    if order_type == 'Domestic':
+        cur.execute("SELECT * FROM so_number_sequence WHERE prefix LIKE '%DOM%' ORDER BY id DESC LIMIT 1")
+    else:
+        cur.execute("SELECT * FROM so_number_sequence WHERE prefix NOT LIKE '%DOM%' ORDER BY id DESC LIMIT 1")
     seq = row_to_dict(cur, cur.fetchone())
     if not seq:
+        if order_type == 'Domestic':
+            return "AIMPL/S.O/DOM/001/2025-26"
         return "AIMPL/S.O/EXP/001/2025-26"
     next_num = seq['last_number'] + 1
     so_number = f"{seq['prefix']}/{str(next_num).zfill(3)}/{seq['financial_year']}"
@@ -23,7 +37,6 @@ def create_batch_cards(cur, so_id, so_number, customer, line_items):
     batch_nos = []
     for item in line_items:
         line_no = item.get('sr_no') or item.get('line_no') or 1
-        # Get next batch number from existing batches
         cur.execute("SELECT MAX(CAST(batch_card_no AS UNSIGNED)) FROM batches WHERE batch_card_no REGEXP '^[0-9]+$'")
         last = cur.fetchone()[0] or 1072
         batch_card_no = str(last + 1)
@@ -76,8 +89,9 @@ def create_so():
     db = get_db()
     cur = db.cursor()
     try:
-        so_number = nd(d.get('so_number')) or generate_so_number(cur)
-        customer  = d.get('customer', '')
+        order_type = d.get('order_type', 'Export')
+        so_number  = nd(d.get('so_number')) or generate_so_number(cur, order_type)
+        customer   = d.get('customer', '')
         cur.execute("""
             INSERT INTO sales_orders (
                 so_number, so_date, po_number, po_date,
@@ -93,15 +107,31 @@ def create_so():
                 %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
             )
         """, (
-            so_number, nd(d.get('so_date')), nd(d.get('po_number')), nd(d.get('po_date')),
-            nd(d.get('supplier_no')), d.get('order_type','Export'), d.get('currency','EUR'),
-            customer, nd(d.get('customer_short_code')), nd(d.get('contact_person')),
-            nd(d.get('sale_made_through')), nd(d.get('delivery_address')), nd(d.get('consignee_address')),
-            nd(d.get('kind_attention')), nd(d.get('sale_made_through')),
-            nd(d.get('delivery_instruction')), nd(d.get('payment_terms')),
-            nd(d.get('inco_term')), nd(d.get('delivery_date')),
-            nd(d.get('shipment_mode')), nd(d.get('bank_charges')), nd(d.get('notes')),
-            d.get('total_qty_tons', 0), d.get('total_amount_euro', 0), 'Pending',
+            so_number,
+            nd_date(d.get('so_date')),
+            nd(d.get('po_number')),
+            nd_date(d.get('po_date')),
+            nd(d.get('supplier_no')),
+            order_type,
+            d.get('currency', 'EUR'),
+            customer,
+            nd(d.get('customer_short_code')),
+            nd(d.get('contact_person')),
+            nd(d.get('sale_made_through')),
+            nd(d.get('delivery_address')),
+            nd(d.get('consignee_address')),
+            nd(d.get('kind_attention')),
+            nd(d.get('sale_made_through')),
+            nd(d.get('delivery_instruction')),
+            nd(d.get('payment_terms')),
+            nd(d.get('inco_term')),
+            nd_date(d.get('delivery_date')),
+            nd(d.get('shipment_mode')),
+            nd(d.get('bank_charges')),
+            nd(d.get('notes')),
+            d.get('total_qty_tons', 0),
+            d.get('total_amount_euro', 0),
+            'Pending',
         ))
         so_id = cur.lastrowid
         line_items = d.get('line_items', [])
@@ -116,15 +146,17 @@ def create_so():
                     wooden_box, rm_max_n_mm2, line_status
                 ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
-                so_id, so_number, i, item.get('description',''),
-                item.get('grade',''), item.get('size_mm',0),
-                item.get('finish',''), item.get('tolerance','h9'),
-                item.get('length_mm',3000), item.get('length_tolerance','-0/+100'),
-                item.get('ends_finish','Chamfered'),
-                item.get('qty_tons',0), item.get('rate_per_ton') or item.get('eur_per_ton',0),
-                item.get('amount',0),
+                so_id, so_number, i, nd(item.get('description', '')),
+                item.get('grade', ''), item.get('size_mm', 0),
+                nd(item.get('finish', '')), item.get('tolerance', 'h9'),
+                item.get('length_mm', 3000), item.get('length_tolerance', '-0/+100'),
+                item.get('ends_finish', 'Chamfered'),
+                item.get('qty_tons', 0),
+                item.get('rate_per_ton') or item.get('eur_per_ton', 0),
+                item.get('amount', 0),
                 1 if item.get('wooden_box') else 0,
-                nd(item.get('rm_max_n_mm2')), 'Pending',
+                nd(item.get('rm_max_n_mm2')),
+                'Pending',
             ))
         specs = d.get('quality_specs')
         if specs:
@@ -139,18 +171,18 @@ def create_so():
                 ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (
                 so_number,
-                specs.get('product_standard','EN 10088-3-2014'),
+                specs.get('product_standard', 'EN 10088-3-2014'),
                 nd(specs.get('heat_treatment')),
-                specs.get('tolerance_class','h9'),
+                specs.get('tolerance_class', 'h9'),
                 nd(specs.get('packing_spec')),
                 nd(specs.get('ut_standard')),
                 nd(specs.get('ut_class_notes')),
                 nd(specs.get('surface_test')),
-                specs.get('mechanical_test','100% UT/MPI'),
-                specs.get('mtc_standard','EN 10204/3.1'),
+                specs.get('mechanical_test', '100% UT/MPI'),
+                specs.get('mtc_standard', 'EN 10204/3.1'),
                 1 if specs.get('radioactivity_free') else 0,
                 nd(specs.get('sulphur_min')),
-                specs.get('weight_tolerance_pct',10),
+                specs.get('weight_tolerance_pct', 10),
                 1 if specs.get('cbam_applicable') else 0,
                 nd(specs.get('cbam_liability')),
                 1 if specs.get('cbam_data_provided') else 0,
@@ -168,6 +200,8 @@ def create_so():
         })
     except Exception as e:
         db.rollback()
+        import traceback
+        print('SO CREATE ERROR:', traceback.format_exc())
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
@@ -192,7 +226,7 @@ def get_so_detail(so_number):
             WHERE b.so_number=%s
         """, (so_number,))
         order['batch_cards'] = rows_to_list(cur)
-        for field in ['so_date','po_date','delivery_date','created_at','updated_at']:
+        for field in ['so_date', 'po_date', 'delivery_date', 'created_at', 'updated_at']:
             if isinstance(order.get(field), datetime):
                 order[field] = order[field].isoformat()
         return jsonify(order)
@@ -213,10 +247,10 @@ def get_lead_time(so_number):
         cur.execute("SELECT * FROM stage_capacity ORDER BY id")
         stages = rows_to_list(cur)
         STAGES = [
-            'RM Receive','UT Inspection','HT Process',
-            'Black Bar Str.','Peeling','Bright Bar Str.',
-            'Grinding','Cutting','Chamfering',
-            'Polishing','MPI Final','Packing','Dispatch'
+            'RM Receive', 'UT Inspection', 'HT Process',
+            'Black Bar Str.', 'Peeling', 'Bright Bar Str.',
+            'Grinding', 'Cutting', 'Chamfering',
+            'Polishing', 'MPI Final', 'Packing', 'Dispatch'
         ]
         stage_cap = {s['stage_name']: s for s in stages}
         result = []

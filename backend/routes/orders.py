@@ -4,7 +4,9 @@ from datetime import datetime
 
 orders_bp = Blueprint('orders', __name__)
 
+
 @orders_bp.route('/api/orders', methods=['GET'])
+@orders_bp.route('/api/so', methods=['GET'])
 def get_orders():
     db = get_db()
     cur = db.cursor()
@@ -13,13 +15,15 @@ def get_orders():
     for order in orders:
         cur.execute("SELECT * FROM so_line_items WHERE so_id=%s ORDER BY sr_no", (order['id'],))
         order['line_items'] = rows_to_list(cur)
-        for field in ['so_date','po_date','delivery_date','created_at']:
+        for field in ['so_date', 'po_date', 'delivery_date', 'created_at']:
             if isinstance(order.get(field), datetime):
                 order[field] = order[field].isoformat()
     db.close()
     return jsonify(orders)
 
+
 @orders_bp.route('/api/orders', methods=['POST'])
+@orders_bp.route('/api/so', methods=['POST'])
 def create_order():
     d = request.json
     db = get_db()
@@ -78,20 +82,25 @@ def create_order():
     finally:
         db.close()
 
+
 @orders_bp.route('/api/orders/<int:oid>', methods=['GET'])
+@orders_bp.route('/api/so/<int:oid>', methods=['GET'])
 def get_order(oid):
     db = get_db()
     cur = db.cursor()
     cur.execute("SELECT * FROM sales_orders WHERE id=%s", (oid,))
     order = row_to_dict(cur, cur.fetchone())
     if not order:
+        db.close()
         return jsonify({'error': 'Not found'}), 404
     cur.execute("SELECT * FROM so_line_items WHERE so_id=%s ORDER BY sr_no", (oid,))
     order['line_items'] = rows_to_list(cur)
     db.close()
     return jsonify(order)
 
+
 @orders_bp.route('/api/orders/<int:oid>', methods=['PUT'])
+@orders_bp.route('/api/so/<int:oid>', methods=['PUT'])
 def update_order(oid):
     d = request.json
     db = get_db()

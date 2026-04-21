@@ -13,7 +13,6 @@ CORS(app)
 
 # ── Existing routes ──────────────────────────────
 from routes.batches       import batches_bp
-from routes.pdf           import pdf_bp
 from routes.orders        import orders_bp
 from routes.qc            import qc_bp
 from routes.dispatch      import dispatch_bp
@@ -22,18 +21,20 @@ from routes.logs          import logs_bp
 from routes.reports       import reports_bp
 from routes.batch_cards   import batch_cards_bp
 from routes.operator_logs import operator_logs_bp
-
+from routes.batch_card_pdf import batch_card_bp
+from routes.scan_routes import scan_bp
+from routes.packing_list import packing_list_bp
 # ── New routes ───────────────────────────────────
 from routes.so_creation   import so_creation_bp
 from routes.crm_sync      import crm_sync_bp, start_crm_polling
 from routes.so_pdf        import so_pdf_bp
 from routes.master_data   import master_bp
-from routes.batch_card_pdf import batch_card_bp
 from routes.commercial_invoice import ci_pdf_bp
+from routes.so_detail import so_detail_bp
+from routes.so_pdf_local import so_pdf_local_bp
 # ── Register all blueprints ──────────────────────
 app.register_blueprint(operator_logs_bp)
 app.register_blueprint(batches_bp)
-app.register_blueprint(pdf_bp)
 app.register_blueprint(orders_bp)
 app.register_blueprint(qc_bp)
 app.register_blueprint(dispatch_bp)
@@ -41,13 +42,17 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(batch_cards_bp)
+app.register_blueprint(scan_bp)
+app.register_blueprint(packing_list_bp)
 app.register_blueprint(so_creation_bp)
 app.register_blueprint(crm_sync_bp)
 app.register_blueprint(so_pdf_bp)
 app.register_blueprint(master_bp)
-app.register_blueprint(batch_card_bp)
-app.register_blueprint(ci_pdf_bp)
 
+app.register_blueprint(ci_pdf_bp)
+app.register_blueprint(batch_card_bp)
+app.register_blueprint(so_detail_bp)
+app.register_blueprint(so_pdf_local_bp)
 # ── Health check ─────────────────────────────────
 @app.route('/api/health')
 def health():
@@ -158,5 +163,4 @@ Extract ALL line items. Use YYYY-MM-DD date format. Return only valid JSON.'''
 if __name__ == '__main__':
     # Start CRM polling in background thread
     start_crm_polling()
-    app.run(debug=True, port=5000)
-
+    app.run(debug=True, host='0.0.0.0' , port=5000)

@@ -1,368 +1,387 @@
-from flask import Blueprint, Response, jsonify
-from db import get_db, rows_to_list, row_to_dict
-from datetime import datetime, date
+﻿from flask import Blueprint, request, make_response
+from db import get_db, row_to_dict, rows_to_list
+from datetime import datetime
 
-so_pdf_bp = Blueprint("so_pdf_bp", __name__)
+so_pdf_bp = Blueprint('so_pdf', __name__)
 
-def fmt_date(d):
-    if not d:
-        return '—'
-    if isinstance(d, (datetime, date)):
-        return d.strftime('%d.%m.%Y')
+def _fmt_date(val):
+    if not val:
+        return '&mdash;'
+    if isinstance(val, str):
+        try:
+            return datetime.strptime(val[:10], '%Y-%m-%d').strftime('%d.%m.%Y')
+        except Exception:
+            return val
     try:
-        return datetime.strptime(str(d)[:10], '%Y-%m-%d').strftime('%d.%m.%Y')
-    except:
-        return str(d)
+        return val.strftime('%d.%m.%Y')
+    except Exception:
+        return str(val)
 
-def fmt_num(v, dec=3):
+def _safe(val, default='&mdash;'):
+    return str(val).strip() if val not in (None, '', 'None') else default
+
+def _num(val, default=0):
     try:
-        return f"{float(v):,.{dec}f}"
-    except:
-        return '—'
-
-def safe(v, default='—'):
-    if v is None or str(v).strip() == '':
+        return float(val)
+    except Exception:
         return default
-    return str(v).strip()
 
-@so_pdf_bp.route("/api/pdf/so/<path:so_number>", methods=["GET"])
-def generate_sales_contract_pdf(so_number):
-    try:
-        conn = get_db()
-        cur  = conn.cursor()
+def _num_words(n):
+    ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen']
+    tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety']
+    def w(x):
+        if x == 0: return ''
+        if x < 20: return ones[x] + ' '
+        if x < 100: return tens[x//10] + ' ' + (ones[x%10] + ' ' if x%10 else '')
+        return ones[x//100] + ' Hundred ' + w(x % 100)
+    n = int(n); r = ''
+    if n >= 1000000: r += w(n // 1000000) + 'Million '; n %= 1000000
+    if n >= 1000:    r += w(n // 1000) + 'Thousand '; n %= 1000
+    return (r + w(n)).strip() or 'Zero'
 
-        # Get SO
-        cur.execute("SELECT * FROM sales_orders WHERE so_number=%s", (so_number,))
-        order = row_to_dict(cur, cur.fetchone())
-        if not order:
-            return jsonify({'error': 'SO not found'}), 404
+@so_pdf_bp.route('/api/pdf/so/<path:so_number>')
+def so_pdf(so_number):
+    so_type    = request.args.get('type', 'export').lower()
+    copy       = request.args.get('copy', 'customer').lower()
+    show_price = (copy == 'customer')
+    unit       = 'kg' if so_type == 'local' else 'tons'
+    db  = get_db()
+    cur = db.cursor()
+    cur.execute('SELECT * FROM sales_orders WHERE so_number = %s', (so_number,))
+    so_row = cur.fetchone()
+    if not so_row:
+        db.close()
+        return make_response('<h2 style="font-family:sans-serif;padding:40px;color:red">SO not found</h2>', 404)
+    so    = row_to_dict(cur, so_row)
+    cur.execute('SELECT * FROM so_line_items WHERE so_id = %s ORDER BY sr_no', (so['id'],))
+    lines = rows_to_list(cur)
+    db.close()
+    html = _render_html(so, lines, so_type, copy, show_price, unit, so_number)
+    response = make_response(html)
+    response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return response
 
-        # Get line items
-        cur.execute("""
-            SELECT * FROM so_line_items
-            WHERE so_number=%s ORDER BY sr_no ASC
-        """, (so_number,))
-        items = rows_to_list(cur)
+def _render_html(so, lines, so_type, copy, show_price, unit, so_number):
+    is_export = (so_type == 'export')
+    is_plant  = (copy == 'plant')
 
-        # Get quality specs
-        cur.execute("SELECT * FROM so_quality_specs WHERE so_number=%s", (so_number,))
-        specs = row_to_dict(cur, cur.fetchone()) or {}
+    so_currency = _safe(so.get('currency', 'EUR')).upper()
+    if not is_export:
+        so_currency = 'INR'
 
-        cur.close()
-        conn.close()
+    if is_export:
+        qty_col  = 'QTY/TONS'
+        rate_col = so_currency + '/TONS'
+        amt_col  = 'AMOUNT IN (' + so_currency + ')'
+    else:
+        qty_col  = 'QTY/KG'
+        rate_col = 'INR/KG'
+        amt_col  = 'AMOUNT (INR)'
 
-        total_qty    = sum(float(i.get('qty_tons') or 0) for i in items)
-        total_amount = sum(float(i.get('amount') or 0) for i in items)
+    line_rows = ''
+    grand_qty = 0.0
+    grand_amt = 0.0
 
-        # ── Build line items rows ──────────────────────────────
-        items_html = ''
-        for i, item in enumerate(items, 1):
-            grade       = safe(item.get('grade'))
-            size        = safe(item.get('size_mm'))
-            tol         = safe(item.get('tolerance','h9'))
-            finish      = safe(item.get('finish',''))
-            length      = safe(item.get('length_mm'))
-            len_tol     = safe(item.get('length_tolerance','-0/+100'))
-            ends        = safe(item.get('ends_finish','Chamfered'))
-            qty         = fmt_num(item.get('qty_tons'), 3)
-            rate        = fmt_num(item.get('rate_per_ton'), 2)
-            amount      = fmt_num(item.get('amount'), 3)
-            desc        = safe(item.get('description',''))
-            ht          = safe(item.get('heat_treatment',''))
-            notes       = safe(item.get('notes',''), '')
+    for i, line in enumerate(lines, 1):
+        qty   = _num(line.get('qty_tons'))
+        price = _num(line.get('rate_per_ton'))
+        amt   = qty * price
+        grand_qty += qty
+        grand_amt += amt
 
-            # Build description line
-            desc_line = desc if desc and desc != '—' else f"SS Round Bright Bar {grade}"
-            if finish and finish != '—':
-                desc_line += f" + {finish}"
-            desc_line += f", {tol} Tol"
+        grade  = _safe(line.get('grade'))
+        tol    = _safe(line.get('tolerance', ''))
+        length = _safe(line.get('length_mm', '3000'))
+        l_tol  = _safe(line.get('length_tolerance', '-0/+100'))
+        ends   = _safe(line.get('ends_finish', 'Chamfered ends'))
+        size   = _safe(line.get('size_mm'))
 
-            sub_line = f"Length {length} {len_tol} MM / {ends} ends"
-            if ht and ht != '—':
-                sub_line2 = ht
-            else:
-                sub_line2 = ''
-            if notes:
-                sub_line2 += (' / ' if sub_line2 else '') + notes
+        qty_disp  = '{:,.3f}'.format(qty) if is_export else '{:,.2f}'.format(qty)
+        price_str = '{:,.2f}'.format(price)
+        amt_str   = '{:,.3f}'.format(amt)
 
-            items_html += f"""
-            <tr>
-              <td style="text-align:center;padding:4px 5px;">{i}</td>
-              <td style="text-align:left;padding:4px 6px;">
-                {desc_line}<br>
-                <span style="font-size:7pt;color:#555;">{sub_line}</span>
-                {'<br><span style="font-size:7pt;color:#555;font-style:italic;">'+sub_line2+'</span>' if sub_line2 else ''}
-              </td>
-              <td style="text-align:center;padding:4px 5px;font-weight:700;">{size}</td>
-              <td style="text-align:center;padding:4px 5px;font-weight:700;">{qty}</td>
-              <td style="text-align:center;padding:4px 5px;">{rate}</td>
-              <td style="text-align:center;padding:4px 5px;font-weight:700;color:#C8521A;">{amount}</td>
-            </tr>"""
+        desc_html = 'SS Round Bright Bar ' + grade + ', ' + tol + ' Tol<br><span style="font-size:7pt;color:#444">Length ' + length + ' ' + l_tol + ' MM / ' + ends + '</span>'
 
-        # ── Build spec rows ────────────────────────────────────
-        def spec_row(label, value):
-            return f'<tr><td class="tl">{label}</td><td class="tv">{safe(value)}</td></tr>'
+        price_td = '<td class="tc">' + price_str + '</td>' if show_price else ''
+        amt_td   = '<td class="tr"><b>' + amt_str + '</b></td>' if show_price else ''
 
-        html = f"""<!DOCTYPE html>
+        line_rows += '''
+        <tr>
+          <td class="tc">''' + str(i) + '''</td>
+          <td style="padding:4px 6px">''' + desc_html + '''</td>
+          <td class="tc">''' + size + '''</td>
+          <td class="tc">''' + qty_disp + '''</td>
+          ''' + price_td + '''
+          ''' + amt_td + '''
+        </tr>'''
+
+    grand_qty_disp = '{:,.3f}'.format(grand_qty) if is_export else '{:,.2f}'.format(grand_qty)
+    grand_amt_str  = '{:,.3f}'.format(grand_amt)
+    words_cell = 'AMOUNT IN WORDS: ' + _num_words(grand_amt) + ' ' + so_currency + ' Only' if show_price else 'AMOUNT IN WORDS: &mdash;&mdash;'
+
+    if show_price:
+        total_price_td = '<td></td>'
+        total_amt_td   = '<td class="tr"><b style="font-size:10pt">' + grand_amt_str + '</b></td>'
+    else:
+        total_price_td = ''
+        total_amt_td   = ''
+
+    total_row = '''
+    <tr style="background:#f5f5f5;font-weight:700">
+      <td colspan="2" class="tr" style="font-size:7.5pt;color:#555">''' + words_cell + '''</td>
+      <td class="tc"><b>Total</b></td>
+      <td class="tc"><b>''' + grand_qty_disp + '''</b></td>
+      ''' + total_price_td + '''
+      ''' + total_amt_td + '''
+    </tr>'''
+
+    price_th = '<th>' + rate_col + '</th>' if show_price else ''
+    amt_th   = '<th>' + amt_col + '</th>' if show_price else ''
+
+    watermark = ''
+    if is_plant:
+        watermark = '<div style="position:fixed;top:35%;left:50%;transform:translateX(-50%) rotate(-35deg);font-size:80pt;font-weight:900;color:rgba(200,50,50,0.06);z-index:0;pointer-events:none;white-space:nowrap;letter-spacing:6px;">FACTORY COPY</div>'
+
+    cbam = ''
+    if is_export:
+        cbam = '''<div style="background:#1A2B4A;color:#fff;font-size:8.5pt;font-weight:700;padding:5px 8px;margin:10px 0 0;letter-spacing:0.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">NOTE : CBAM COMPLIANCE AND LIABILITY CLAUSE</div>
+        <div class="cbam-box">
+          <p>1. As of January 1st, following the implementation of the European Union&#39;s Carbon Border Adjustment Mechanism (CBAM), Alok Ingots Pvt. Ltd. provides all customers, to the best of its knowledge and ability, with accurate carbon emissions data. This information is independently verified by a certified third-party auditor to ensure transparency and compliance.</p>
+          <p style="margin-top:6px">2. All obligations, costs, levies, duties, or charges arising from the application or enforcement of CBAM within the European Union shall be the sole responsibility of the customer.</p>
+        </div>'''
+
+    plant_note = ''
+    if is_plant:
+        bank_rows = '''
+        <tr><td class="lbl">Import/Export Code :</td><td>030 407 9421</td></tr>
+        <tr><td class="lbl">Bank&#39;s Name :</td><td>STATE BANK OF INDIA, Commercial Branch</td></tr>
+        <tr><td class="lbl">Bank&#39;s Address :</td><td>1st Floor, Majestic Shopping Centre, 144, JSS Marg, Girgaon, Mumbai, Maharashtra &mdash; 400004</td></tr>
+        <tr><td class="lbl">ACCOUNT NUMBER :</td><td><b>1027 166 7742</b></td></tr>
+        <tr><td class="lbl">SWIFT CODE :</td><td><b>SBIN INBB 516</b></td></tr>'''
+    else:
+        bank_rows = '''
+        <tr><td class="lbl">Bank&#39;s Name :</td><td>STATE BANK OF INDIA, Commercial Branch</td></tr>
+        <tr><td class="lbl">Bank&#39;s Address :</td><td>1st Floor, Majestic Shopping Centre, 144, JSS Marg, Girgaon, Mumbai, Maharashtra &mdash; 400004</td></tr>
+        <tr><td class="lbl">ACCOUNT NUMBER :</td><td><b>1027 166 7742</b></td></tr>
+        <tr><td class="lbl">IFSC CODE :</td><td><b>SBIN0003594</b></td></tr>'''
+
+    so_num     = _safe(so.get('so_number'))
+    so_date    = _fmt_date(so.get('so_date'))
+    po_num     = _safe(so.get('po_number'))
+    po_date    = _fmt_date(so.get('po_date'))
+    sup_no     = _safe(so.get('supplier_no'))
+    offer_ref  = _safe(so.get('offer_ref_no'))
+    cust_name  = _safe(so.get('customer'))
+    cust_email = _safe(so.get('customer_email'))
+    kind_attn  = _safe(so.get('kind_attention'))
+    cust_tel   = _safe(so.get('customer_tel'))
+    cust_fax   = _safe(so.get('customer_fax'))
+    del_addr   = _safe(so.get('delivery_address'))
+    cons_addr  = _safe(so.get('consignee_address'))
+    sale_thru  = _safe(so.get('sale_made_through'))
+    del_instr  = _safe(so.get('delivery_instruction'))
+    pay_terms  = _safe(so.get('payment_terms'))
+    inco_term  = _safe(so.get('inco_term'))
+    ship_mode  = _safe(so.get('shipment_mode'))
+    bank_chg   = _safe(so.get('bank_charges'), "Any Bank Charges Inside India will be at Alok&#39;s Account &amp; Outside India Shall Be At Buyers Account.")
+    cust_code  = _safe(so.get('customer_short_code'))
+
+    HDR_STYLE = 'background:#1A2B4A;color:#fff;font-size:8.5pt;font-weight:700;padding:5px 8px;margin:10px 0 0;letter-spacing:0.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact;'
+
+    return '''<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sales Contract — {so_number}</title>
-<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<title>Sales Contract</title>
 <style>
-*{{margin:0;padding:0;box-sizing:border-box;}}
-:root{{--orange:#C8521A;--navy:#1A2B4A;--blue:#1E4E8C;--grey:#555;--border:#AAAAAA;--text:#111;}}
-body{{font-family:'DM Sans',sans-serif;font-size:8.5pt;color:var(--text);background:#D1D5DB;}}
-.page{{width:210mm;min-height:297mm;background:white;margin:0 auto;padding:8mm 10mm;box-shadow:0 2px 12px rgba(0,0,0,0.15);}}.letterhead{{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:6px;margin-bottom:0;border-bottom:3px solid var(--orange);}}
-.lh-logo{{width:46px;height:46px;background:var(--navy);border-radius:4px;display:flex;align-items:center;justify-content:center;color:white;font-family:'Crimson Pro',serif;font-weight:700;font-size:14pt;flex-shrink:0;}}
-.lh-name{{font-family:'Crimson Pro',serif;font-size:14pt;font-weight:700;color:var(--navy);line-height:1.1;}}
-.lh-sub{{font-size:6.5pt;color:var(--grey);letter-spacing:1.5px;text-transform:uppercase;margin-top:1px;}}
-.lh-addr{{font-size:7pt;color:var(--grey);line-height:1.55;margin-top:3px;}}
-.lh-right{{text-align:right;}}
-.lh-brand{{font-family:'Crimson Pro',serif;font-size:22pt;font-weight:700;color:var(--orange);letter-spacing:2px;line-height:1;}}
-.lh-brand-sub{{font-size:7pt;letter-spacing:3px;color:var(--grey);text-transform:uppercase;}}
-.lh-contact{{font-size:7pt;color:var(--grey);line-height:1.7;margin-top:2px;text-align:right;}}
-.title-bar{{background:var(--navy);color:white;text-align:center;padding:5px 0;font-family:'Crimson Pro',serif;font-size:14pt;font-weight:700;letter-spacing:3px;text-transform:uppercase;}}
-.main-table{{width:100%;border-collapse:collapse;border:1px solid var(--border);}}
-.main-table td{{border:1px solid var(--border);padding:3px 6px;vertical-align:top;font-size:8pt;}}
-.fl{{font-weight:600;color:var(--navy);white-space:nowrap;width:110px;background:#F8F9FC;font-size:7.5pt;}}
-.fv{{color:var(--text);font-size:8pt;}}
-.fv.bold{{font-weight:700;}}
-.fv.orange{{color:var(--orange);font-weight:700;}}
-.items-wrap{{border:1px solid var(--border);border-top:none;}}
-.it{{width:100%;border-collapse:collapse;}}
-.it th{{background:var(--navy);color:white;padding:4px 5px;font-size:7pt;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;border-right:1px solid #2D3F5F;text-align:center;white-space:nowrap;}}
-.it th.left{{text-align:left;}}
-.it th:last-child{{border-right:none;}}
-.it td{{padding:4px 5px;border-bottom:1px solid #E5E7EB;border-right:1px solid #E5E7EB;vertical-align:top;font-size:7.5pt;}}
-.it td:last-child{{border-right:none;}}
-.it tr:nth-child(even) td{{background:#FAFBFC;}}
-.it .tot td{{background:#FFF4EE;font-weight:700;font-size:8.5pt;border-top:2px solid var(--orange);}}
-.terms-table{{width:100%;border-collapse:collapse;border:1px solid var(--border);border-top:none;}}
-.terms-table td{{border:1px solid var(--border);padding:3px 6px;font-size:7.5pt;vertical-align:top;}}
-.tl{{font-weight:600;color:var(--navy);width:120px;background:#F8F9FC;white-space:nowrap;}}
-.tv{{color:var(--text);}}
-.sec-hdr{{background:var(--navy);color:white;padding:3px 6px;font-size:8pt;font-weight:700;letter-spacing:0.5px;}}
-.sbox{{border:1px solid var(--border);border-top:none;}}
-.sbox-hdr{{background:#F0F4FF;padding:3px 6px;font-size:7pt;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border);}}
-.sbox-body{{padding:5px 8px;font-size:7.5pt;line-height:1.7;}}
-.bank-table{{width:100%;border-collapse:collapse;border:1px solid var(--border);margin-top:6px;}}
-.bank-table th{{background:var(--navy);color:white;padding:3px 6px;font-size:7.5pt;font-weight:700;letter-spacing:0.5px;text-align:left;}}
-.bank-table td{{border:1px solid var(--border);padding:3px 6px;font-size:7.5pt;}}
-.bl{{font-weight:600;color:var(--navy);background:#F8F9FC;width:140px;}}
-.sig-row{{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);margin-top:10px;}}
-.sig-cell{{padding:8px 12px 12px;border-right:1px solid var(--border);}}
-.sig-cell:last-child{{border-right:none;}}
-.sig-for{{font-weight:700;font-size:8.5pt;color:var(--navy);margin-bottom:28px;}}
-.sig-line{{border-top:1px solid var(--text);margin-bottom:2px;}}
-.sig-sub{{font-size:7pt;color:var(--grey);}}
-.page-footer{{display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px;padding-top:5px;border-top:2px solid var(--orange);}}
-.footer-left{{font-size:7pt;color:var(--grey);line-height:1.6;}}
-.footer-right{{font-size:7pt;color:var(--grey);text-align:right;line-height:1.6;}}
-.footer-name{{font-weight:700;font-size:8pt;color:var(--navy);}}
-.page-break{{page-break-before:always;}}
-.chem-table{{width:100%;border-collapse:collapse;border:1px solid var(--border);}}
-.chem-table th{{background:var(--navy);color:white;padding:3px 4px;font-size:7pt;font-weight:600;text-align:center;border-right:1px solid #2D3F5F;}}
-.chem-table td{{border:1px solid var(--border);padding:3px 5px;font-size:7.5pt;text-align:center;vertical-align:middle;}}
-.chem-table td.gc{{font-weight:700;color:var(--blue);background:#F8F9FC;}}
-.chem-table td.sc{{font-size:7pt;color:var(--grey);background:#FAFAFA;}}
-.ann-title{{background:var(--navy);color:white;text-align:center;padding:4px;font-family:'Crimson Pro',serif;font-size:11pt;font-weight:700;letter-spacing:2px;margin-top:10px;}}
-.comm-box{{border:1px solid var(--border);margin-top:6px;}}
-.comm-hdr{{background:var(--navy);color:white;padding:3px 6px;font-size:7.5pt;font-weight:700;letter-spacing:0.5px;}}
-.comm-body{{padding:5px 8px;font-size:7.5pt;line-height:1.8;}}
-@media print {{
-  * {{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }}
-  body {{ background: white !important; margin: 0; }}
-  .no-print {{ display: none !important; }}
-  .page {{
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 10mm 12mm !important;
-    box-shadow: none !important;
-  }}
-  @page {{
-    size: A4 portrait;
-    margin: 0;
-  }}
-  table {{ page-break-inside: avoid; }}
-  .section {{ page-break-inside: avoid; }}
-}}
-.controls{{position:fixed;top:16px;right:16px;display:flex;gap:8px;z-index:100;}}
-.btn{{background:var(--navy);color:white;border:none;padding:9px 18px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.25);}}
-.btn:hover{{background:var(--orange);}}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Calibri, Segoe UI, Arial, sans-serif; font-size: 9pt; color: #111; background: #fff; padding: 8mm 10mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @media print { body { padding: 5mm 8mm; } .no-print { display: none !important; } tr { page-break-inside: avoid; } }
+  .lh { display:flex; justify-content:space-between; align-items:flex-start; border-bottom: 2px solid #1A2B4A; padding-bottom: 8px; margin-bottom: 10px; }
+  .lh-left .co-name { font-size:16pt; font-weight:700; color:#1A2B4A; }
+  .lh-left .co-tag  { font-size:7.5pt; letter-spacing:2px; color:#555; text-transform:uppercase; margin:1px 0 4px; }
+  .lh-left .co-addr { font-size:7.5pt; color:#444; line-height:1.7; }
+  .lh-right img { height:56px; width:auto; }
+  .hdr-table { width:100%; border-collapse:collapse; border:1px solid #999; }
+  .hdr-table td { border:1px solid #999; padding:4px 7px; font-size:8.5pt; vertical-align:top; color:#111; }
+  .hdr-table .lbl { background:#f0f0f0; font-weight:700; width:140px; white-space:nowrap; color:#111; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .items-wrap { margin:10px 0 0; }
+  .items-table { width:100%; border-collapse:collapse; }
+  .items-table th { background:#1A2B4A; color:#fff; font-size:8pt; font-weight:700; padding:5px 6px; border:1px solid #1A2B4A; text-align:center; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .items-table td { border:1px solid #bbb; padding:4px 6px; font-size:8.5pt; vertical-align:top; color:#111; }
+  .items-table tr:nth-child(even) td { background:#fafafa; }
+  .tc { text-align:center; }
+  .tr { text-align:right; }
+  .terms-table { width:100%; border-collapse:collapse; border:1px solid #bbb; }
+  .terms-table td { border:1px solid #bbb; padding:4px 8px; font-size:8.5pt; vertical-align:top; color:#111; }
+  .terms-table .lbl { background:#f0f0f0; font-weight:700; width:160px; white-space:nowrap; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .cbam-box { border:1px solid #bbb; padding:8px 10px; font-size:8pt; color:#333; line-height:1.6; }
+  .bank-table { width:100%; border-collapse:collapse; border:1px solid #bbb; }
+  .bank-table td { border:1px solid #bbb; padding:4px 8px; font-size:8.5pt; color:#111; }
+  .bank-table .lbl { background:#f0f0f0; font-weight:700; width:180px; white-space:nowrap; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .sig-table { width:100%; border-collapse:collapse; margin-top:10px; }
+  .sig-table td { border:1px solid #bbb; padding:8px 12px 6px; width:50%; vertical-align:top; }
+  .sig-for { font-weight:700; font-size:9pt; margin-bottom:30px; }
+  .sig-line { border-bottom:1px solid #333; margin-bottom:3px; }
+  .sig-sub { font-size:7pt; color:#666; }
+  .pg-footer { display:flex; justify-content:space-between; border-top:1px solid #aaa; margin-top:8px; padding-top:5px; font-size:7pt; color:#555; }
+  .no-print { position:fixed; top:10px; right:12px; z-index:999; }
+  .btn-print { background:#1A2B4A; color:#fff; border:none; padding:7px 16px; font-size:9pt; border-radius:3px; cursor:pointer; font-weight:600; }
 </style>
 </head>
 <body>
-<button class="no-print" onclick="window.print()" 
-  style="position:fixed;top:16px;right:24px;...">
-  🖨 Print / Save PDF
-</button>
-<!-- PAGE 1 -->
-<div class="page">
- <div class="letterhead" style="display:flex;justify-content:space-between;align-items:center;">
-    <div>
-      <div class="lh-name">Alok Ingots (Mumbai) Pvt. Ltd.</div>
-      <div class="lh-sub">Steel Re-Engineered &nbsp;|&nbsp; Tel: +91 22 40220080 &nbsp;|&nbsp; www.alokindia.com</div>
-      <div class="lh-addr">602, Raheja Chambers, 213 Free Press, Journal Marg, Nariman Point 400021, India<br>
-      ISO 9001:2015 &nbsp;|&nbsp; IATF 16949:2016 &nbsp;|&nbsp; PED 2014/68/EU &nbsp;|&nbsp; AD 2000 Merkblatt W0</div>
-    </div>
-    <img src="http://localhost:5173/ALOK_Logo.png" style="height:54px;width:auto;" onerror="this.style.display='none'">
-  </div>
 
-  <div class="title-bar">Sales Contract</div>
+''' + watermark + '''
 
-  <table class="main-table">
-    <tr>
-      <td class="fl">Sales Contract No</td>
-      <td class="fv orange bold" colspan="3">{safe(order.get('so_number'))}</td>
-      <td class="fl" style="width:70px;">S.O. Date:</td>
-      <td class="fv bold">{fmt_date(order.get('so_date'))}</td>
-    </tr>
-    <tr>
-      <td class="fl">Purchase Order No</td>
-      <td class="fv bold" colspan="3">{safe(order.get('po_number'))}</td>
-      <td class="fl">P.O. Date:</td>
-      <td class="fv">{fmt_date(order.get('po_date'))}</td>
-    </tr>
-    <tr>
-      <td class="fl">Supplier No</td>
-      <td class="fv" colspan="3">{safe(order.get('supplier_no'))}</td>
-      <td class="fl"></td><td class="fv"></td>
-    </tr>
-    <tr>
-      <td class="fl">Offer Ref No</td>
-      <td class="fv" colspan="5"></td>
-    </tr>
-    <tr>
-      <td class="fl">Customer's Name</td>
-      <td class="fv bold" colspan="2">{safe(order.get('customer'))}</td>
-      <td class="fl" style="width:55px;">E-mail:</td>
-      <td class="fv" colspan="2" style="font-size:7.5pt;">{safe(order.get('contact_email',''))}</td>
-    </tr>
-    <tr>
-      <td class="fl"></td>
-      <td class="fv" colspan="2">{safe(order.get('delivery_address',''))}</td>
-      <td class="fl">Tel No:</td>
-      <td class="fv" colspan="2">{safe(order.get('contact_phone',''))}</td>
-    </tr>
-    <tr>
-      <td class="fl"></td>
-      <td class="fv" colspan="2"></td>
-      <td class="fl">Fax No:</td>
-      <td class="fv" colspan="2">{safe(order.get('contact_fax',''))}</td>
-    </tr>
-    <tr>
-      <td class="fl">Delivery Address</td>
-      <td class="fv bold" colspan="5">{safe(order.get('delivery_address',''))}</td>
-    </tr>
-    <tr>
-      <td class="fl">Consignee Address</td>
-      <td class="fv" colspan="5">{safe(order.get('consignee_address',''))}</td>
-    </tr>
-    <tr><td class="fl"></td><td class="fv" colspan="5"></td></tr>
-    <tr>
-      <td class="fl">Kind Attention:</td>
-      <td class="fv" colspan="5">{safe(order.get('kind_attention',''))}</td>
-    </tr>
-    <tr>
-      <td class="fl">Sale made through:</td>
-      <td class="fv" colspan="5">{safe(order.get('sale_made_through',''))}</td>
-    </tr>
-    <tr>
-      <td class="fl">Delivery Instruction:</td>
-      <td class="fv" colspan="5">{safe(order.get('delivery_instruction',''))}</td>
-    </tr>
-    <tr>
-      <td class="fl">Terms of payment:</td>
-      <td class="fv" colspan="5">{safe(order.get('payment_terms',''))}</td>
-    </tr>
-  </table>
+<div class="no-print">
+  <button class="btn-print" onclick="window.print()">&#128424; Print / Save PDF</button>
+</div>
 
-  <div class="items-wrap">
-    <table class="it">
-      <thead>
-        <tr>
-          <th style="width:28px;">Sr. No.</th>
-          <th class="left" style="min-width:200px;">Items Description</th>
-          <th style="width:55px;">Size (mm)</th>
-          <th style="width:55px;">Qty/tons</th>
-          <th style="width:70px;">EURO/tons</th>
-          <th style="width:85px;">Amount in (EURO)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items_html}
-        <tr class="tot">
-          <td colspan="2" style="text-align:right;font-size:8pt;color:var(--grey);">AMOUNT IN WORDS: <em>——</em></td>
-          <td style="text-align:right;font-weight:700;">Total</td>
-          <td style="font-size:10pt;font-weight:800;color:var(--navy);text-align:center;">{fmt_num(total_qty,3)}</td>
-          <td style="font-size:8pt;font-weight:700;color:var(--grey);text-align:center;">AMOUNT IN (EURO)</td>
-          <td style="font-size:11pt;font-weight:800;color:var(--orange);text-align:center;">{fmt_num(total_amount,3)}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div style="margin-top:8px;">
-    <div class="sec-hdr">Terms &amp; Conditions :</div>
-    <table class="terms-table">
-      {spec_row('Weight of goods', f"shall be Max {fmt_num(total_qty,3)} (+ /-10%) in each size")}
-      {spec_row('Inco Term', order.get('inco_term'))}
-      {spec_row('Duty', 'Export duty will be charged if still applicable. 15% or whatever applicable at the time of shipment.')}
-      {spec_row('Shipment', order.get('shipment_mode'))}
-      {spec_row('Bank Charges', order.get('bank_charges') or "Any Bank Charges Inside India will be at Alok's Account & Outside India Shall Be At Buyers Account.")}
-      {spec_row('Customer Short Code', order.get('customer_short_code'))}
-    </table>
-  </div>
-
-  <div class="sbox" style="margin-top:6px;">
-    <div class="sbox-hdr">Note : CBAM Compliance and Liability Clause</div>
-    <div class="sbox-body">
-      1. As of January 1st, following the implementation of the European Union's Carbon Border Adjustment Mechanism (CBAM), Alok Ingots Pvt. Ltd. provides all customers, to the best of its knowledge and ability, with accurate carbon emissions data. This information is independently verified by a certified third-party auditor to ensure transparency and compliance.<br><br>
-      2. All obligations, costs, levies, duties, or charges arising from the application or enforcement of CBAM within the European Union shall be the sole responsibility of the customer.
+<div class="lh">
+  <div class="lh-left">
+    <div class="co-name">Alok Ingots (Mumbai) Pvt. Ltd.</div>
+    <div class="co-tag">Steel Re-Engineered &nbsp;|&nbsp; Tel: +91 22 40220080 &nbsp;|&nbsp; www.alokindia.com</div>
+    <div class="co-addr">
+      602, Raheja Chambers, 213 Free Press, Journal Marg, Nariman Point 400021, India<br>
+      ISO 9001:2015 &nbsp;|&nbsp; IATF 16949:2016 &nbsp;|&nbsp; PED 2014/68/EU &nbsp;|&nbsp; AD 2000 Merkblatt W0
     </div>
   </div>
+  <div class="lh-right">
+    <img src="http://localhost:5000/static/ALOK_Logo.png" onerror="this.style.display=\'none\'" alt="Alok Ingots">
+  </div>
+</div>
 
-  <table class="bank-table">
-    <tr><th colspan="2">BANK DETAILS :</th></tr>
-    <tr><td class="bl">Import/Export Code :</td><td>030 407 9421</td></tr>
-    <tr><td class="bl">Bank's Name :</td><td>STATE BANK OF INDIA, Commercial Branch</td></tr>
-    <tr><td class="bl">Bank's Address :</td><td>1st Floor, Majestic Shopping Centre, 144, JSS Marg, Girgaon, Mumbai, Maharashtra – 400004</td></tr>
-    <tr><td class="bl">ACCOUNT NUMBER :</td><td style="font-weight:700;">1027 166 7742</td></tr>
-    <tr><td class="bl">SWIFT CODE :</td><td style="font-weight:700;">SBIN INBB 516</td></tr>
+<div style="background:#1A2B4A;color:#fff;text-align:center;font-size:13pt;font-weight:700;letter-spacing:3px;padding:7px 0;margin:8px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact;">S A L E S &nbsp;&nbsp; C O N T R A C T</div>
+''' + plant_note + '''
+
+<table class="hdr-table" style="margin-top:6px">
+  <tr>
+    <td class="lbl">Sales Contract No</td>
+    <td colspan="2"><b>''' + so_num + '''</b></td>
+    <td class="lbl" style="width:90px">S.O. Date:</td>
+    <td style="width:110px">''' + so_date + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Purchase Order No</td>
+    <td colspan="2">''' + po_num + '''</td>
+    <td class="lbl">P.O. Date:</td>
+    <td>''' + po_date + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Supplier No</td>
+    <td colspan="4">''' + sup_no + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Offer Ref No</td>
+    <td colspan="4">''' + offer_ref + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Customer\'s Name</td>
+    <td><b>''' + cust_name + '''</b></td>
+    <td class="lbl" style="width:60px">E-mail:</td>
+    <td colspan="2">''' + cust_email + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl"></td>
+    <td>''' + kind_attn + '''</td>
+    <td class="lbl">Tel No:</td>
+    <td colspan="2">''' + cust_tel + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl"></td>
+    <td></td>
+    <td class="lbl">Fax No:</td>
+    <td colspan="2">''' + cust_fax + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Delivery Address</td>
+    <td colspan="4">''' + del_addr + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Consignee Address</td>
+    <td colspan="4">''' + cons_addr + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Kind Attention:</td>
+    <td colspan="4">''' + kind_attn + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Sale made through:</td>
+    <td colspan="4">''' + sale_thru + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Delivery Instruction:</td>
+    <td colspan="4">''' + del_instr + '''</td>
+  </tr>
+  <tr>
+    <td class="lbl">Terms of payment:</td>
+    <td colspan="4">''' + pay_terms + '''</td>
+  </tr>
+</table>
+
+<div class="items-wrap">
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width:32px">SR. NO.</th>
+        <th style="text-align:left">ITEMS DESCRIPTION</th>
+        <th style="width:75px">SIZE (MM)</th>
+        <th style="width:80px">''' + qty_col + '''</th>
+        ''' + price_th + '''
+        ''' + amt_th + '''
+      </tr>
+    </thead>
+    <tbody>
+      ''' + line_rows + '''
+      ''' + total_row + '''
+    </tbody>
   </table>
+</div>
 
-  <div class="sig-row">
-    <div class="sig-cell">
-      <div class="sig-for">For {safe(order.get('customer','Customer'))}</div>
+<div style="''' + HDR_STYLE + '''">Terms &amp; Conditions :</div>
+<table class="terms-table">
+  <tr><td class="lbl">Weight of goods</td><td>shall be Max ''' + grand_qty_disp + ''' (+ /&#8211;10%) in each size</td></tr>
+  <tr><td class="lbl">Inco Term</td><td>''' + inco_term + '''</td></tr>
+  <tr><td class="lbl">Duty</td><td>Export duty will be charged if still applicable. 15% or whatever applicable at the time of shipment.</td></tr>
+  <tr><td class="lbl">Shipment</td><td>''' + ship_mode + '''</td></tr>
+  <tr><td class="lbl">Bank Charges</td><td>''' + bank_chg + '''</td></tr>
+  <tr><td class="lbl">Customer Short Code</td><td>''' + cust_code + '''</td></tr>
+</table>
+
+''' + cbam + '''
+
+<div style="''' + HDR_STYLE + '''">BANK DETAILS :</div>
+<table class="bank-table">
+  ''' + bank_rows + '''
+</table>
+
+<table class="sig-table">
+  <tr>
+    <td>
+      <div class="sig-for">For ''' + cust_name + '''</div>
       <div class="sig-line"></div>
       <div class="sig-sub">Authorised Signatory</div>
-    </div>
-    <div class="sig-cell">
+    </td>
+    <td>
       <div class="sig-for">For, Alok Ingots (Mumbai) Pvt. Ltd.</div>
       <div class="sig-line"></div>
       <div class="sig-sub">Authorised Signatory</div>
-    </div>
-  </div>
+    </td>
+  </tr>
+</table>
 
-  <div class="page-footer">
-    <div class="footer-left">
-      <div class="footer-name">ALOK INGOTS (MUMBAI) PVT LTD</div>
-      602, Raheja Chambers, 213 Free Press, Journal Marg, Nariman Point 400021, India<br>
-      Tel: +91 22 40220080 &nbsp; www.alokindia.com
-    </div>
-    <div class="footer-right">
-      Bank name- State Bank of India<br>
-      144, Jss Marg, Girgaon, Mumbai: 400004<br>
-      A/C No: 10271667742 &nbsp; Swift Code: SBININBB516
-    </div>
+<div class="pg-footer">
+  <div>
+    <b>ALOK INGOTS (MUMBAI) PVT LTD</b><br>
+    602, Raheja Chambers, 213 Free Press, Journal Marg, Nariman Point 400021, India<br>
+    Tel: +91 22 40220080 &nbsp; www.alokindia.com
+  </div>
+  <div style="text-align:right">
+    Bank name&mdash; State Bank of India<br>
+    144, Jss Marg, Girgaon, Mumbai: 400004<br>
+    A/C No: 10271667742 &nbsp; Swift Code: SBININBB516
   </div>
 </div>
 
 </body>
-</html>"""
-
-        return Response(html, mimetype='text/html')
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+</html>'''
