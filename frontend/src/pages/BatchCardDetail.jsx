@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
-const API = 'http://localhost:5000'
+const API = ''
 
 const STAGES = [
   'RM Receive','UT Inspection','HT Process','Black Bar Str.',

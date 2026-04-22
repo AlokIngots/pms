@@ -12,8 +12,8 @@ crm_sync_bp = Blueprint('crm_sync', __name__)
 # CRM URL — update this to your CRM VPS URL
 # ─────────────────────────────────────────
 CRM_BASE_URL = os.getenv('CRM_BASE_URL', 'https://crm.alokindia.co.in')
-CRM_WON_ENDPOINT = f"{CRM_BASE_URL}/api/offers/won"
-POLL_INTERVAL = 60  # seconds
+CRM_WON_ENDPOINT = f"{CRM_BASE_URL}/api/v1/deals/won"
+POLL_INTERVAL = 5  # seconds
 
 
 # ─────────────────────────────────────────
@@ -134,8 +134,10 @@ def process_won_offer(offer):
         """, (
             so_number,
             offer.get('po_number'),
-            offer.get('sale_type', 'Export'),
-            offer.get('currency', 'EUR'),
+            # Auto-detect Export vs Domestic from price_uom
+            ('Domestic' if (offer.get('line_items') and 'INR' in str(offer['line_items'][0].get('price_uom', '')).upper()) else 'Export'),
+            # Auto-detect currency from price_uom
+            ('INR' if (offer.get('line_items') and 'INR' in str(offer['line_items'][0].get('price_uom', '')).upper()) else ('USD' if (offer.get('line_items') and 'USD' in str(offer['line_items'][0].get('price_uom', '')).upper()) else 'EUR')),
             customer,
             offer.get('customer_short_code'),
             offer.get('contact_person'),
@@ -234,7 +236,7 @@ def poll_crm():
     print(f"[CRM SYNC] Started polling {CRM_WON_ENDPOINT} every {POLL_INTERVAL}s")
     while True:
         try:
-            response = requests.get(CRM_WON_ENDPOINT, timeout=15)
+            response = requests.get(CRM_WON_ENDPOINT, headers={"X-PMS-Token": "AlokPMS2026Secret"}, timeout=15)
             if response.status_code == 200:
                 offers = response.json()
                 if offers:
@@ -300,7 +302,7 @@ def crm_sync_status():
 @crm_sync_bp.route('/api/crm-sync/manual', methods=['POST'])
 def manual_sync():
     try:
-        response = requests.get(CRM_WON_ENDPOINT, timeout=15)
+        response = requests.get(CRM_WON_ENDPOINT, headers={"X-PMS-Token": "AlokPMS2026Secret"}, timeout=15)
         if response.status_code != 200:
             return jsonify({'error': f'CRM returned {response.status_code}'}), 400
         offers = response.json()

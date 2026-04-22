@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useBatches } from '../context/BatchContext'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API = import.meta.env.VITE_API_URL || ''
 
 const SAMPLE_ALERTS = [
   { id: 1, batch_card_no: '1068', grade: '316L',       customer: 'Caprari',   stage: 'Grinding',       severity: 'Critical', hours_stuck: 18.5, acknowledged: 0, created_at: '2026-03-31T08:00:00' },

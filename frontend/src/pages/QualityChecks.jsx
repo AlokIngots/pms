@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useBatches } from '../context/BatchContext'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API = import.meta.env.VITE_API_URL || ''
 
 const SAMPLE_QC = [
   { id: 1, batch_card_no: '1067', heat_no: 'A14319', grade: '1.4021/420', size_mm: 110, check_type: 'UT Inspection',  date: '2026-03-28', inspector: 'Pandit',  result: 'OK',      pcs_received: 11, ut_ok: 10, ut_reject: 1, end_cut_wt: 0.268, remarks: 'One piece rejected — surface crack' },

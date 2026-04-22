@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBatches } from '../context/BatchContext'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API = import.meta.env.VITE_API_URL || ''
 
 const STAGE_ORDER = [
   'RM Receive', 'UT Inspection', 'HT Process', 'Black Bar Str.',

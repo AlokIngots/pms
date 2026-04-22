@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API = 'http://localhost:5000'
+const API = ''
 
 const MACHINES = [
   { id:1,  name:'Kieserling WDH 60',   type:'Peeling',       shed:'Shed 1', status:'Running' },
