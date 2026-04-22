@@ -13,12 +13,13 @@
 CREATE DATABASE /*!32312 IF NOT EXISTS*/ `alok_pms` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 
 USE `alok_pms`;
+DROP TABLE IF EXISTS `alerts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `alerts` (
   `id` int NOT NULL AUTO_INCREMENT,
   `batch_id` int DEFAULT NULL,
-  `batch_card_no` varchar(20) DEFAULT NULL,
+  `batch_card_no` varchar(50) DEFAULT NULL,
   `grade` varchar(100) DEFAULT NULL,
   `customer` varchar(200) DEFAULT NULL,
   `stage` varchar(100) DEFAULT NULL,
@@ -31,12 +32,13 @@ CREATE TABLE `alerts` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `batch_cards`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `batch_cards` (
   `id` int NOT NULL AUTO_INCREMENT,
   `batch_id` int DEFAULT NULL,
-  `batch_card_no` varchar(20) DEFAULT NULL,
+  `batch_card_no` varchar(50) DEFAULT NULL,
   `date` date DEFAULT NULL,
   `do_year` varchar(10) DEFAULT NULL,
   `prepared_by` varchar(100) DEFAULT NULL,
@@ -65,6 +67,7 @@ CREATE TABLE `batch_cards` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `batch_ht_process`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `batch_ht_process` (
@@ -87,6 +90,7 @@ CREATE TABLE `batch_ht_process` (
   CONSTRAINT `batch_ht_process_ibfk_1` FOREIGN KEY (`batch_id`) REFERENCES `batches` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `batch_inspection`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `batch_inspection` (
@@ -110,6 +114,7 @@ CREATE TABLE `batch_inspection` (
   CONSTRAINT `batch_inspection_ibfk_1` FOREIGN KEY (`batch_id`) REFERENCES `batches` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `batch_process_route`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `batch_process_route` (
@@ -135,6 +140,7 @@ CREATE TABLE `batch_process_route` (
   CONSTRAINT `batch_process_route_ibfk_1` FOREIGN KEY (`batch_id`) REFERENCES `batches` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `batch_stage_history`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `batch_stage_history` (
@@ -148,6 +154,7 @@ CREATE TABLE `batch_stage_history` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=243 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `batches`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `batches` (
@@ -182,6 +189,7 @@ CREATE TABLE `batches` (
   UNIQUE KEY `batch_card_no` (`batch_card_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=246 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ci_line_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ci_line_items` (
@@ -206,6 +214,7 @@ CREATE TABLE `ci_line_items` (
   CONSTRAINT `ci_line_items_ibfk_1` FOREIGN KEY (`invoice_no`) REFERENCES `commercial_invoices` (`invoice_no`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `commercial_invoices`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `commercial_invoices` (
@@ -245,6 +254,7 @@ CREATE TABLE `commercial_invoices` (
   UNIQUE KEY `invoice_no` (`invoice_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `crm_sync_log`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `crm_sync_log` (
@@ -258,6 +268,7 @@ CREATE TABLE `crm_sync_log` (
   UNIQUE KEY `crm_offer_id` (`crm_offer_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=191 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customer_grade_specs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customer_grade_specs` (
@@ -281,6 +292,7 @@ CREATE TABLE `customer_grade_specs` (
   CONSTRAINT `customer_grade_specs_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `customers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `customers` (
@@ -299,12 +311,13 @@ CREATE TABLE `customers` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `dispatch_batches`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `dispatch_batches` (
   `id` int NOT NULL AUTO_INCREMENT,
   `dispatch_id` int NOT NULL,
-  `batch_card_no` varchar(20) DEFAULT NULL,
+  `batch_card_no` varchar(50) DEFAULT NULL,
   `heat_no` varchar(50) DEFAULT NULL,
   `grade` varchar(100) DEFAULT NULL,
   `size_mm` decimal(10,2) DEFAULT NULL,
@@ -315,6 +328,7 @@ CREATE TABLE `dispatch_batches` (
   CONSTRAINT `dispatch_batches_ibfk_1` FOREIGN KEY (`dispatch_id`) REFERENCES `dispatches` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `dispatches`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `dispatches` (
@@ -344,6 +358,7 @@ CREATE TABLE `dispatches` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `grades`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `grades` (
@@ -372,11 +387,12 @@ CREATE TABLE `grades` (
   UNIQUE KEY `grade_code` (`grade_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `machine_log`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `machine_log` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `batch_card_no` varchar(20) NOT NULL,
+  `batch_card_no` varchar(50) NOT NULL,
   `stage_name` varchar(50) NOT NULL,
   `machine_code` varchar(30) DEFAULT NULL,
   `operator_name` varchar(100) DEFAULT NULL,
@@ -393,6 +409,7 @@ CREATE TABLE `machine_log` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `machines`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `machines` (
@@ -406,6 +423,7 @@ CREATE TABLE `machines` (
   UNIQUE KEY `machine_code` (`machine_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `operator_logs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `operator_logs` (
@@ -436,12 +454,13 @@ CREATE TABLE `operator_logs` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `qc_records`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `qc_records` (
   `id` int NOT NULL AUTO_INCREMENT,
   `batch_id` int DEFAULT NULL,
-  `batch_card_no` varchar(20) DEFAULT NULL,
+  `batch_card_no` varchar(50) DEFAULT NULL,
   `heat_no` varchar(50) DEFAULT NULL,
   `grade` varchar(100) DEFAULT NULL,
   `size_mm` decimal(10,2) DEFAULT NULL,
@@ -465,6 +484,7 @@ CREATE TABLE `qc_records` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `sales_orders`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sales_orders` (
@@ -501,6 +521,7 @@ CREATE TABLE `sales_orders` (
   UNIQUE KEY `so_number` (`so_number`)
 ) ENGINE=InnoDB AUTO_INCREMENT=200 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `so_line_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `so_line_items` (
@@ -531,6 +552,7 @@ CREATE TABLE `so_line_items` (
   CONSTRAINT `so_line_items_ibfk_1` FOREIGN KEY (`so_id`) REFERENCES `sales_orders` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=250 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `so_number_sequence`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `so_number_sequence` (
@@ -542,6 +564,7 @@ CREATE TABLE `so_number_sequence` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `so_quality_specs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `so_quality_specs` (
@@ -578,6 +601,7 @@ CREATE TABLE `so_quality_specs` (
   UNIQUE KEY `so_number` (`so_number`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `stage_capacity`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `stage_capacity` (
@@ -591,6 +615,7 @@ CREATE TABLE `stage_capacity` (
   UNIQUE KEY `stage_name` (`stage_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `stage_logs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `stage_logs` (
