@@ -177,6 +177,7 @@ CREATE TABLE `batches` (
   `customer` varchar(200) DEFAULT NULL,
   `shed` varchar(50) DEFAULT NULL,
   `current_stage` varchar(100) DEFAULT 'RM Receive',
+  `qr_token` varchar(64) DEFAULT NULL,
   `current_stage_index` int DEFAULT '0',
   `status` varchar(50) DEFAULT 'In Progress',
   `priority` varchar(20) DEFAULT 'On Track',
@@ -407,7 +408,7 @@ CREATE TABLE `machine_log` (
   `remarks` text,
   `logged_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `machines`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
