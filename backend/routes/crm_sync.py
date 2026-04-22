@@ -13,7 +13,14 @@ crm_sync_bp = Blueprint('crm_sync', __name__)
 # ─────────────────────────────────────────
 CRM_BASE_URL = os.getenv('CRM_BASE_URL', 'https://crm.alokindia.co.in')
 CRM_WON_ENDPOINT = f"{CRM_BASE_URL}/api/v1/deals/won"
-POLL_INTERVAL = 5  # seconds
+CRM_SYNC_TOKEN   = os.getenv('CRM_SYNC_TOKEN', '')
+
+def _crm_headers():
+    h = {'Accept': 'application/json'}
+    if CRM_SYNC_TOKEN:
+        h['X-PMS-Token'] = CRM_SYNC_TOKEN
+    return h
+POLL_INTERVAL = int(os.getenv("CRM_POLL_INTERVAL", "60"))
 
 
 # ─────────────────────────────────────────
@@ -236,7 +243,7 @@ def poll_crm():
     print(f"[CRM SYNC] Started polling {CRM_WON_ENDPOINT} every {POLL_INTERVAL}s")
     while True:
         try:
-            response = requests.get(CRM_WON_ENDPOINT, headers={"X-PMS-Token": "AlokPMS2026Secret"}, timeout=15)
+            response = requests.get(CRM_WON_ENDPOINT, headers=_crm_headers(), timeout=15)
             if response.status_code == 200:
                 offers = response.json()
                 if offers:
@@ -302,7 +309,7 @@ def crm_sync_status():
 @crm_sync_bp.route('/api/crm-sync/manual', methods=['POST'])
 def manual_sync():
     try:
-        response = requests.get(CRM_WON_ENDPOINT, headers={"X-PMS-Token": "AlokPMS2026Secret"}, timeout=15)
+        response = requests.get(CRM_WON_ENDPOINT, headers=_crm_headers(), timeout=15)
         if response.status_code != 200:
             return jsonify({'error': f'CRM returned {response.status_code}'}), 400
         offers = response.json()
