@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const API = 'http://localhost:5000'
+const API = ''
 
 const STATUS_COLORS = {
   'Pending':       { bg: '#FFF3E0', color: '#E65100', dot: '#FB8C00' },

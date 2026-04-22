@@ -9,7 +9,15 @@ import json
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+# ── CORS: restrict to known origins ──────────────
+_cors_origins = [
+    o.strip() for o in os.getenv(
+        'CORS_ORIGINS',
+        'https://pms.alokindia.co.in,http://localhost:5173,http://localhost:8080'
+    ).split(',') if o.strip()
+]
+CORS(app, resources={r"/api/*": {"origins": _cors_origins}}, supports_credentials=True)
 
 # ── Existing routes ──────────────────────────────
 from routes.batches       import batches_bp
@@ -32,27 +40,16 @@ from routes.master_data   import master_bp
 from routes.commercial_invoice import ci_pdf_bp
 from routes.so_detail import so_detail_bp
 from routes.so_pdf_local import so_pdf_local_bp
-# ── Register all blueprints ──────────────────────
-app.register_blueprint(operator_logs_bp)
-app.register_blueprint(batches_bp)
-app.register_blueprint(orders_bp)
-app.register_blueprint(qc_bp)
-app.register_blueprint(dispatch_bp)
-app.register_blueprint(dashboard_bp)
-app.register_blueprint(logs_bp)
-app.register_blueprint(reports_bp)
-app.register_blueprint(batch_cards_bp)
-app.register_blueprint(scan_bp)
-app.register_blueprint(packing_list_bp)
-app.register_blueprint(so_creation_bp)
-app.register_blueprint(crm_sync_bp)
-app.register_blueprint(so_pdf_bp)
-app.register_blueprint(master_bp)
 
-app.register_blueprint(ci_pdf_bp)
-app.register_blueprint(batch_card_bp)
-app.register_blueprint(so_detail_bp)
-app.register_blueprint(so_pdf_local_bp)
+# ── Register all blueprints ──────────────────────
+for bp in (
+    operator_logs_bp, batches_bp, orders_bp, qc_bp, dispatch_bp,
+    dashboard_bp, logs_bp, reports_bp, batch_cards_bp, scan_bp,
+    packing_list_bp, so_creation_bp, crm_sync_bp, so_pdf_bp,
+    master_bp, ci_pdf_bp, batch_card_bp, so_detail_bp, so_pdf_local_bp,
+):
+    app.register_blueprint(bp)
+
 # ── Health check ─────────────────────────────────
 @app.route('/api/health')
 def health():
@@ -160,7 +157,17 @@ Extract ALL line items. Use YYYY-MM-DD date format. Return only valid JSON.'''
         return jsonify({'error': str(e)}), 500
 
 
+# ── Start CRM polling thread (gunicorn-safe) ─────
+# With gunicorn --preload, this runs once in the master before workers fork.
+# Without --preload, it would run per-worker (= duplicate CRM hits).
+def _maybe_start_polling():
+    if os.getenv('ENABLE_CRM_POLLING', 'true').lower() == 'true':
+        if os.getenv('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+            start_crm_polling()
+
+_maybe_start_polling()
+
+
 if __name__ == '__main__':
-    # Start CRM polling in background thread
-    start_crm_polling()
-    app.run(debug=True, host='0.0.0.0' , port=5000)
+    debug = os.getenv('FLASK_ENV', 'production') == 'development'
+    app.run(debug=debug, host='0.0.0.0', port=5000)

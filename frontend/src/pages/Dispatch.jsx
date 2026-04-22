@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useBatches } from '../context/BatchContext'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const API = import.meta.env.VITE_API_URL || ''
 
 const TRANSPORTERS = ['VRL Logistics','Gati Express','DTDC Freight','TCI Freight','Safexpress','BlueDart','Own vehicle']
 

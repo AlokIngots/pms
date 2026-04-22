@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
-const API = 'http://localhost:5000'
+const API = ''
 
 function Field({ label, value, onCommit, type, options, span, textarea, readonly }) {
   const [local, setLocal] = useState(value || '')
