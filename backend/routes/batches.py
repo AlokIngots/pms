@@ -1,6 +1,6 @@
 ﻿from flask import Blueprint, request, jsonify
 from db import get_db, rows_to_list, row_to_dict
-from datetime import datetime
+from datetime import datetime, date
 
 batches_bp = Blueprint('batches', __name__)
 
@@ -208,3 +208,84 @@ def move_batch_stage(batch_no):
 
 
 
+
+
+# ─────────────────────────────────────────
+# GET /api/batches/<id>/context
+# Returns everything an operator needs to see when moving a stage:
+#  - order_details: what the customer ordered (from SO)
+#  - previous_stage: what the last operator recorded
+#  - stage_history: full movement history
+# ─────────────────────────────────────────
+@batches_bp.route('/api/batches/<int:bid>/context', methods=['GET'])
+def batch_context(bid):
+    db = get_db()
+    cur = db.cursor()
+    try:
+        # 1. Batch + SO line item data
+        cur.execute("""
+            SELECT b.id, b.batch_card_no, b.so_number, b.grade_code, b.size_mm,
+                   b.tolerance, b.weight_kg, b.no_of_pcs, b.current_stage, b.customer,
+                   b.ht_process, b.priority, b.status
+            FROM batches b
+            WHERE b.id = %s
+        """, (bid,))
+        batch = row_to_dict(cur, cur.fetchone())
+        if not batch:
+            return jsonify({'error': 'Batch not found'}), 404
+
+        # 2. Original SO line item (what was ordered)
+        order_details = None
+        if batch.get('so_number'):
+            cur.execute("""
+                SELECT sli.grade, sli.size_mm, sli.length_mm, sli.tolerance,
+                       sli.finish, sli.ends_finish, sli.qty_tons, sli.rate_per_ton,
+                       sli.description,
+                       so.customer, so.so_date, so.delivery_date, so.inco_term,
+                       so.payment_terms, so.order_type, so.currency, so.po_number
+                FROM so_line_items sli
+                LEFT JOIN sales_orders so ON so.so_number = sli.so_number
+                WHERE sli.batch_card_no = %s
+                LIMIT 1
+            """, (batch['batch_card_no'],))
+            order_details = row_to_dict(cur, cur.fetchone())
+            # Convert date/datetime to ISO strings for JSON
+            if order_details:
+                for k, v in list(order_details.items()):
+                    if isinstance(v, (date, datetime)):
+                        order_details[k] = v.isoformat()
+
+        # 3. Previous stage log (most recent machine_log entry for this batch)
+        cur.execute("""
+            SELECT stage_name, machine_code, operator_name, shift,
+                   qty_pcs_in, qty_pcs_out, qty_rejected,
+                   weight_kg_in, weight_kg_out, remarks, logged_at
+            FROM machine_log
+            WHERE batch_card_no = %s
+            ORDER BY logged_at DESC
+            LIMIT 1
+        """, (batch['batch_card_no'],))
+        previous_stage = row_to_dict(cur, cur.fetchone())
+        if previous_stage and isinstance(previous_stage.get('logged_at'), (date, datetime)):
+            previous_stage['logged_at'] = previous_stage['logged_at'].isoformat()
+
+        # 4. Full stage movement history
+        cur.execute("""
+            SELECT from_stage, to_stage, moved_by, notes, moved_at
+            FROM batch_stage_history
+            WHERE batch_card_no = %s
+            ORDER BY moved_at ASC
+        """, (batch['batch_card_no'],))
+        history = rows_to_list(cur)
+        for h in history:
+            if isinstance(h.get('moved_at'), (date, datetime)):
+                h['moved_at'] = h['moved_at'].isoformat()
+
+        return jsonify({
+            'batch': batch,
+            'order_details': order_details,
+            'previous_stage': previous_stage,
+            'stage_history': history,
+        })
+    finally:
+        db.close()

@@ -44,3 +44,7 @@ backend/uploads/
 backend/generated_pdfs/
 *.bak
 *_old.py
+
+# Backup files from manual edits
+*.bak
+*.bak2
