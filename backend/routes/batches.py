@@ -87,10 +87,13 @@ def update_stage(bid):
         """, (stage, stage_idx, d.get('priority', 'On Track'), d.get('status', 'In Progress'), bid))
         if d.get('log'):
             log = d['log']
+            # Convert empty strings to None for numeric columns (MySQL won't accept '' for DECIMAL)
+            def _num(v):
+                return None if v in (None, '', 'null') else v
             cur.execute("""
                 INSERT INTO stage_logs (batch_id, stage, operator, machine, shift, input_size, output_size, ovality, remarks, logged_at)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (bid, log.get('stage'), log.get('operator'), log.get('machine'), log.get('shift'), log.get('input_size'), log.get('output_size'), log.get('ovality'), log.get('remarks'), datetime.now()))
+            """, (bid, log.get('stage'), log.get('operator'), log.get('machine'), log.get('shift'), _num(log.get('input_size')), _num(log.get('output_size')), _num(log.get('ovality')), log.get('remarks'), datetime.now()))
         db.commit()
         return jsonify({'success': True})
     except Exception as e:
