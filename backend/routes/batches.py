@@ -289,3 +289,105 @@ def batch_context(bid):
         })
     finally:
         db.close()
+
+
+@batches_bp.route('/api/batches/<int:batch_id>/context', methods=['GET'])
+def batch_context(batch_id):
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT
+                b.id, b.batch_card_no, b.grade_code, b.size_mm, b.length_mm,
+                b.heat_no, b.no_of_pcs, b.weight_kg, b.tolerance, b.ht_process,
+                b.bb_process, b.ends_finish, b.customer, b.shed, b.current_stage,
+                b.status, b.priority, b.so_id, b.so_number, b.line_no, b.created_at,
+                so.order_type, so.delivery_date, so.salesperson,
+                so.customer_short_code, so.total_qty_tons
+            FROM batches b
+            LEFT JOIN sales_orders so ON b.so_id = so.id
+            WHERE b.id = %s
+        """, (batch_id,))
+        batch = cur.fetchone()
+        if not batch:
+            return jsonify({'error': 'Batch not found'}), 404
+
+        batch_card_no = batch['batch_card_no']
+
+        cur.execute("""
+            SELECT stage_name, machine_code, operator_name, shift,
+                   qty_pcs_in, qty_pcs_out, qty_rejected,
+                   weight_kg_in, weight_kg_out, remarks,
+                   start_time, end_time, logged_at
+            FROM machine_log
+            WHERE batch_card_no = %s
+            ORDER BY logged_at ASC
+        """, (batch_card_no,))
+        history = cur.fetchall()
+
+        total_rejected = sum((h.get('qty_rejected') or 0) for h in history)
+        first_stage = history[0] if history else None
+        last_stage = history[-1] if history else None
+        pcs_originally_in = first_stage.get('qty_pcs_in') if first_stage else None
+        pcs_currently_out = last_stage.get('qty_pcs_out') if last_stage else None
+        pcs_accepted_forward = (pcs_originally_in - total_rejected) if pcs_originally_in is not None else None
+
+        prev_stage = None
+        if last_stage:
+            prev_stage = {
+                'stage_name': last_stage.get('stage_name'),
+                'operator_name': last_stage.get('operator_name'),
+                'machine_code': last_stage.get('machine_code'),
+                'shift': last_stage.get('shift'),
+                'pcs_out': last_stage.get('qty_pcs_out'),
+                'weight_kg_out': float(last_stage['weight_kg_out']) if last_stage.get('weight_kg_out') else None,
+                'qty_rejected': last_stage.get('qty_rejected'),
+                'completed_at': str(last_stage.get('end_time') or last_stage.get('logged_at')),
+            }
+
+        def _f(v):
+            return float(v) if v is not None else None
+
+        return jsonify({
+            'batch': {
+                'id': batch['id'],
+                'batch_card_no': batch['batch_card_no'],
+                'grade': batch['grade_code'],
+                'size_mm': _f(batch['size_mm']),
+                'length_mm': batch['length_mm'],
+                'heat_no': batch['heat_no'],
+                'no_of_pcs': batch['no_of_pcs'],
+                'weight_kg': _f(batch['weight_kg']),
+                'tolerance': batch['tolerance'],
+                'ht_process': batch['ht_process'],
+                'bb_process': batch['bb_process'],
+                'ends_finish': batch['ends_finish'],
+                'customer': batch['customer'],
+                'shed': batch['shed'],
+                'current_stage': batch['current_stage'],
+                'status': batch['status'],
+                'priority': batch['priority'],
+            },
+            'sales_order': {
+                'so_id': batch['so_id'],
+                'so_number': batch['so_number'],
+                'line_no': batch['line_no'],
+                'order_type': batch['order_type'],
+                'delivery_date': batch['delivery_date'].isoformat() if batch.get('delivery_date') else None,
+                'salesperson': batch['salesperson'],
+                'customer_short_code': batch['customer_short_code'],
+                'total_qty_tons': _f(batch['total_qty_tons']),
+            },
+            'summary': {
+                'pcs_ordered': batch['no_of_pcs'],
+                'weight_ordered_kg': _f(batch['weight_kg']),
+                'pcs_originally_in': pcs_originally_in,
+                'pcs_currently_out': pcs_currently_out,
+                'pcs_accepted_forward': pcs_accepted_forward,
+                'total_rejected': total_rejected,
+                'stages_completed': len(history),
+            },
+            'previous_stage': prev_stage,
+        })
+    finally:
+        cur.close()

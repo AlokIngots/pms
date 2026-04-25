@@ -1,3 +1,4 @@
+^K
 import React, { useState, useEffect } from 'react'
 import { useBatches } from '../context/BatchContext'
 
@@ -190,7 +191,7 @@ export default function Dispatch() {
     load()
   }, [])
 
-  const readyBatches = batches.filter(b => b.current_stage === 'Ready for Dispatch' && b.status !== 'Dispatched')
+  const readyBatches = batches.filter(b => b.status !== 'Dispatched' && b.current_stage !== 'Dispatch')
 
   function toggleSelect(batchNo) {
     setSelected(s => s.includes(batchNo) ? s.filter(x => x !== batchNo) : [...s, batchNo])
