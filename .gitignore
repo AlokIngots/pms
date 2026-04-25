@@ -48,3 +48,5 @@ backend/generated_pdfs/
 # Backup files from manual edits
 *.bak
 *.bak2
+*.backup-*
+*.bak
